@@ -1314,22 +1314,36 @@ function submitAddItem() {
 
 // ===== 搭配操作 =====
 function regenerateOutfit() {
-  var cands = outfitCandidates[currentOccasion];
+  var isHome = document.getElementById("screen-home").classList.contains("active");
+  var occ = isHome ? "commute" : currentOccasion;
+  var cands = outfitCandidates[occ];
   if (!cands || cands.length <= 1) {
-    var p = pickOutfit(currentOccasion, 0);
-    renderOutfitData(p.data, p.allConflict);
+    var p = pickOutfit(occ, 0);
+    if (isHome) renderHomeOutfitData(p.data, p.allConflict);
+    else renderOutfitData(p.data, p.allConflict);
     return;
   }
   for (var i = 1; i <= cands.length; i++) {
     var tryIdx = (currentOutfitIdx + i) % cands.length;
-    var p = pickOutfit(currentOccasion, tryIdx);
+    var p = pickOutfit(occ, tryIdx);
     if (!p.allConflict) {
       currentOutfitIdx = p.idx;
-      renderOutfitData(p.data, false);
+      if (isHome) renderHomeOutfitData(p.data, false);
+      else renderOutfitData(p.data, false);
       return;
     }
   }
   showToast("当前场合的搭配近期都穿过了，先记录几天新的吧～");
+}
+
+function renderHomeOutfitData(data, allConflict) {
+  if (!data) return;
+  var items = data.items.map(getItemById).filter(Boolean);
+  renderOutfitVisual("homeOutfitPreview", items);
+  renderItemsRow("homeItemsRow", items);
+  document.getElementById("homeOutfitReason").textContent = data.reason;
+  var tip = document.getElementById("homeOutfitConflictTip");
+  if (tip) tip.style.display = allConflict ? "block" : "none";
 }
 
 function occasionLabel(occ) {
