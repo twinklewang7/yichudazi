@@ -819,10 +819,12 @@ var WEATHER_CODES = {
 var WEATHER_ICONS = {0:"☀",1:"☀",2:"⛅",3:"☁",45:"🌫",48:"🌫",51:"🌦",53:"🌦",55:"🌧",56:"🌧",57:"🌧",61:"🌦",63:"🌧",65:"🌧",66:"🌧",67:"🌧",71:"🌨",73:"🌨",75:"❄",77:"🌨",80:"🌦",81:"🌧",82:"⛈",85:"🌨",86:"🌨",95:"⛈",96:"⛈",99:"⛈"};
 
 function weatherTip(temp, code) {
-  if (code >= 71 && code <= 99 && code !== 80) return "注意保暖";
-  if (temp >= 30) return "适合轻薄透气";
-  if (temp >= 20) return "舒适温度";
-  if (temp >= 10) return "建议薄外套";
+  var isSnow = (code >= 71 && code <= 77) || (code >= 85 && code <= 86);
+  var isRain = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95);
+  if (isSnow) return "注意保暖";
+  if (temp >= 30) return isRain ? "炎热有雨·带伞" : "适合轻薄透气";
+  if (temp >= 20) return isRain ? "有雨记得带伞" : "舒适温度";
+  if (temp >= 10) return isRain ? "凉爽有雨·带伞" : "建议薄外套";
   return "注意保暖";
 }
 
