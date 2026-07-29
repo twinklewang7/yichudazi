@@ -257,6 +257,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .form-input,.form-select{width:100%;padding:10px 12px;border:0.5px solid var(--border-strong);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);outline:none;font-family:inherit;color:var(--text-1)}
 .form-input:focus,.form-select:focus{border-color:var(--primary)}
 .photo-source{display:flex;gap:12px;margin-bottom:12px}.photo-source-btn{flex:1;padding:14px 12px;background:var(--bg);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text-2);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .15s ease}.photo-source-btn:active{background:var(--primary-tint);border-color:var(--primary);color:var(--primary)}.photo-source-btn svg{width:22px;height:22px}.photo-preview{width:100%;aspect-ratio:16/9;background:var(--bg);border-radius:var(--radius-md);position:relative;overflow:hidden;cursor:pointer}.photo-preview img{width:100%;height:100%;object-fit:cover;display:block}.photo-preview-hint{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:11px;text-align:center;padding:6px}
+.detect-hint{display:none;align-items:center;gap:6px;margin-top:8px;padding:8px 12px;background:var(--primary-light);border-radius:var(--radius-sm);font-size:12px;color:var(--primary)}
+.detect-hint.show{display:flex}
+.detect-hint .detect-swatch{width:16px;height:16px;border-radius:50%;border:1px solid var(--border-strong);flex-shrink:0}
 
 .color-picker{display:flex;gap:8px;flex-wrap:wrap}
 .color-option{width:32px;height:32px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:border-color 0.15s}
@@ -520,25 +523,35 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
       </div>
       <div class="form-group">
         <label class="form-label">类别</label>
-        <select class="form-select" id="itemCategory">
-          <option value="tops">上衣</option>
-          <option value="pants">裤装</option>
-          <option value="outerwear">外套</option>
-          <option value="shoes">鞋履</option>
-          <option value="acc">配饰</option>
-        </select>
+        <div class="tag-picker" id="catPicker">
+          <div class="tag-option selected" data-cat="tops" data-name="上衣">上衣</div>
+          <div class="tag-option" data-cat="pants" data-name="裤装">裤装</div>
+          <div class="tag-option" data-cat="outerwear" data-name="外套">外套</div>
+          <div class="tag-option" data-cat="shoes" data-name="鞋履">鞋履</div>
+          <div class="tag-option" data-cat="acc" data-name="配饰">配饰</div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">主色</label>
         <div class="color-picker" id="colorPicker">
           <div class="color-option selected" style="background:#FFFFFF" data-color="#FFFFFF" data-name="白色"></div>
           <div class="color-option" style="background:#1A1A18" data-color="#1A1A18" data-name="黑色"></div>
-          <div class="color-option" style="background:#A8B8C5" data-color="#A8B8C5" data-name="浅蓝"></div>
           <div class="color-option" style="background:#9C9A92" data-color="#9C9A92" data-name="灰色"></div>
+          <div class="color-option" style="background:#A8B8C5" data-color="#A8B8C5" data-name="浅蓝"></div>
+          <div class="color-option" style="background:#2C4A7C" data-color="#2C4A7C" data-name="深蓝"></div>
           <div class="color-option" style="background:#D4C5A9" data-color="#D4C5A9" data-name="米色"></div>
           <div class="color-option" style="background:#B8956A" data-color="#B8956A" data-name="卡其"></div>
+          <div class="color-option" style="background:#8B5A3C" data-color="#8B5A3C" data-name="棕色"></div>
           <div class="color-option" style="background:#C9A23D" data-color="#C9A23D" data-name="姜黄"></div>
           <div class="color-option" style="background:#E07856" data-color="#E07856" data-name="珊瑚橙"></div>
+          <div class="color-option" style="background:#C0392B" data-color="#C0392B" data-name="红色"></div>
+          <div class="color-option" style="background:#E8B4B8" data-color="#E8B4B8" data-name="粉色"></div>
+          <div class="color-option" style="background:#5A8A5A" data-color="#5A8A5A" data-name="绿色"></div>
+          <div class="color-option" style="background:#6B5B95" data-color="#6B5B95" data-name="紫色"></div>
+        </div>
+        <div class="detect-hint" id="detectHint">
+          <span class="detect-swatch" id="detectSwatch"></span>
+          <span id="detectText">已识别主色</span>
         </div>
       </div>
       <div class="form-group">
@@ -1175,12 +1188,27 @@ document.getElementById("searchInput").addEventListener("input", function() {
   renderWardrobe();
 });
 
-// 颜色选择器
+// 颜色选择器（选色后自动更新建议名称）
 document.querySelectorAll("#colorPicker .color-option").forEach(function(opt) {
   opt.addEventListener("click", function() {
     document.querySelectorAll("#colorPicker .color-option").forEach(function(o) { o.classList.remove("selected"); });
     this.classList.add("selected");
+    autoSuggestName();
   });
+});
+
+// 类别快选（单选，切换后更新建议名称）
+document.querySelectorAll("#catPicker .tag-option").forEach(function(chip) {
+  chip.addEventListener("click", function() {
+    document.querySelectorAll("#catPicker .tag-option").forEach(function(c) { c.classList.remove("selected"); });
+    this.classList.add("selected");
+    autoSuggestName();
+  });
+});
+
+// 名称手动编辑追踪
+document.getElementById("itemName").addEventListener("input", function() {
+  nameManuallyEdited = this.value.trim() !== "";
 });
 
 // 季节/风格 tag picker
@@ -1196,10 +1224,16 @@ bindTagPicker("stylePicker");
 function openAddModal() {
   // 重置表单
   document.getElementById("itemName").value = "";
-  document.getElementById("itemCategory").value = "tops";
+  nameManuallyEdited = false;
   var previewBox = document.getElementById("photoPreview");
   if (previewBox) previewBox.style.display = "none";
   pendingPhotoBlob = null;
+  // 隐藏识别提示
+  document.getElementById("detectHint").classList.remove("show");
+  // 重置类别 chips
+  document.querySelectorAll("#catPicker .tag-option").forEach(function(c) {
+    c.classList.toggle("selected", c.dataset.cat === "tops");
+  });
   // 重置颜色
   document.querySelectorAll("#colorPicker .color-option").forEach(function(o, i) {
     o.classList.toggle("selected", i === 0);
@@ -1221,6 +1255,89 @@ document.getElementById("addModal").addEventListener("click", function(e) {
 
 // ===== 拍照 / 相册选择 =====
 var pendingPhotoBlob = null;
+var nameManuallyEdited = false;
+
+// 调色板 RGB 映射（与 HTML colorPicker 一致）
+var COLOR_PALETTE_RGB = [
+  {hex:"#FFFFFF",name:"白色",r:255,g:255,b:255},
+  {hex:"#1A1A18",name:"黑色",r:26,g:26,b:24},
+  {hex:"#9C9A92",name:"灰色",r:156,g:154,b:146},
+  {hex:"#A8B8C5",name:"浅蓝",r:168,g:184,b:197},
+  {hex:"#2C4A7C",name:"深蓝",r:44,g:74,b:124},
+  {hex:"#D4C5A9",name:"米色",r:212,g:197,b:169},
+  {hex:"#B8956A",name:"卡其",r:184,g:149,b:106},
+  {hex:"#8B5A3C",name:"棕色",r:139,g:90,b:60},
+  {hex:"#C9A23D",name:"姜黄",r:201,g:162,b:61},
+  {hex:"#E07856",name:"珊瑚橙",r:224,g:120,b:86},
+  {hex:"#C0392B",name:"红色",r:192,g:57,b:43},
+  {hex:"#E8B4B8",name:"粉色",r:232,g:180,b:184},
+  {hex:"#5A8A5A",name:"绿色",r:90,g:138,b:90},
+  {hex:"#6B5B95",name:"紫色",r:107,g:91,b:149}
+];
+
+// 从图片提取主色：缩小采样 + 跳过白色背景 + 取非白色像素平均色
+function extractDominantColor(imgEl) {
+  var size = 64;
+  var canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  var ctx = canvas.getContext("2d");
+  ctx.drawImage(imgEl, 0, 0, size, size);
+  var data;
+  try { data = ctx.getImageData(0, 0, size, size).data; }
+  catch(e) { return {r:255,g:255,b:255}; }
+  var r=0, g=0, b=0, count=0;
+  for (var i=0; i<data.length; i+=4) {
+    var pr=data[i], pg=data[i+1], pb=data[i+2], pa=data[i+3];
+    if (pa < 128) continue;            // 跳过透明像素
+    if (pr>238 && pg>238 && pb>238) continue; // 跳过白色背景
+    if (pr<20 && pg<20 && pb<20) continue;    // 跳过纯黑边缘
+    r+=pr; g+=pg; b+=pb; count++;
+  }
+  if (count === 0) return {r:255,g:255,b:255};
+  return {r:Math.round(r/count), g:Math.round(g/count), b:Math.round(b/count)};
+}
+
+// 匹配最接近的调色板颜色
+function nearestColorName(rgb) {
+  var best = COLOR_PALETTE_RGB[0];
+  var bestDist = Infinity;
+  COLOR_PALETTE_RGB.forEach(function(c) {
+    var dr = rgb.r - c.r, dg = rgb.g - c.g, db = rgb.b - c.b;
+    var dist = dr*dr + dg*dg + db*db;
+    if (dist < bestDist) { bestDist = dist; best = c; }
+  });
+  return best;
+}
+
+// 自动建议名称：颜色名 + 类别名
+function autoSuggestName() {
+  if (nameManuallyEdited) return;
+  var colorOpt = document.querySelector("#colorPicker .color-option.selected");
+  var colorName = colorOpt ? colorOpt.dataset.name : "";
+  var catOpt = document.querySelector("#catPicker .tag-option.selected");
+  var catName = catOpt ? catOpt.dataset.name : "";
+  document.getElementById("itemName").value = colorName + catName;
+}
+
+// 照片选好后自动识别主色
+function autoDetectFromImage(imgEl) {
+  var rgb = extractDominantColor(imgEl);
+  var match = nearestColorName(rgb);
+  // 选中对应颜色
+  document.querySelectorAll("#colorPicker .color-option").forEach(function(o) {
+    o.classList.toggle("selected", o.dataset.color === match.hex);
+  });
+  // 显示识别提示
+  var hint = document.getElementById("detectHint");
+  var swatch = document.getElementById("detectSwatch");
+  var text = document.getElementById("detectText");
+  swatch.style.background = match.hex;
+  text.textContent = "已识别主色：" + match.name + "（可手动调整）";
+  hint.classList.add("show");
+  // 自动建议名称
+  autoSuggestName();
+}
 
 function handlePhotoSelected(file) {
   if (!file) return;
@@ -1242,6 +1359,8 @@ function handlePhotoSelected(file) {
         var previewImg = document.getElementById("photoPreviewImg");
         previewImg.src = URL.createObjectURL(blob);
         previewBox.style.display = "block";
+        // 自动识别主色 + 建议名称
+        autoDetectFromImage(img);
       }, "image/jpeg", 0.85);
     };
     img.src = ev.target.result;
@@ -1267,7 +1386,8 @@ var CAT_META = {
 
 function submitAddItem() {
   var name = document.getElementById("itemName").value.trim();
-  var cat = document.getElementById("itemCategory").value;
+  var catOpt = document.querySelector("#catPicker .tag-option.selected");
+  var cat = catOpt ? catOpt.dataset.cat : "tops";
   var colorOpt = document.querySelector("#colorPicker .color-option.selected");
   var color = colorOpt ? colorOpt.dataset.color : "#FFFFFF";
   var colorName = colorOpt ? colorOpt.dataset.name : "白色";
