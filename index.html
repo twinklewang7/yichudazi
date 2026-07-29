@@ -256,11 +256,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .form-label{font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:6px;display:block}
 .form-input,.form-select{width:100%;padding:10px 12px;border:0.5px solid var(--border-strong);border-radius:var(--radius-sm);font-size:13px;background:var(--bg);outline:none;font-family:inherit;color:var(--text-1)}
 .form-input:focus,.form-select:focus{border-color:var(--primary)}
-.photo-upload{width:100%;aspect-ratio:16/9;background:var(--bg);border:1.5px dashed var(--border-strong);border-radius:var(--radius-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:var(--text-3);position:relative;overflow:hidden}
-.photo-upload svg{width:32px;height:32px}
-.photo-upload span{font-size:12px}
-.photo-upload img.preview{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.photo-upload .change-hint{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;text-align:center;padding:4px}
+.photo-source{display:flex;gap:12px;margin-bottom:12px}.photo-source-btn{flex:1;padding:14px 12px;background:var(--bg);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text-2);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .15s ease}.photo-source-btn:active{background:var(--primary-tint);border-color:var(--primary);color:var(--primary)}.photo-source-btn svg{width:22px;height:22px}.photo-preview{width:100%;aspect-ratio:16/9;background:var(--bg);border-radius:var(--radius-md);position:relative;overflow:hidden;cursor:pointer}.photo-preview img{width:100%;height:100%;object-fit:cover;display:block}.photo-preview-hint{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:11px;text-align:center;padding:6px}
+
 .color-picker{display:flex;gap:8px;flex-wrap:wrap}
 .color-option{width:32px;height:32px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:border-color 0.15s}
 .color-option.selected{border-color:var(--primary)}
@@ -500,11 +497,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
       <h2>添加衣服</h2>
       <div class="form-group">
         <label class="form-label">拍照 / 上传照片</label>
-        <div class="photo-upload" id="photoUpload" onclick="document.getElementById('photoInput').click()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/><path d="M8 6l1-2h6l1 2"/></svg>
-          <span id="photoUploadText">点击拍照或从相册选择</span>
-          <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+        <div class="photo-source">
+          <button type="button" class="photo-source-btn" onclick="document.getElementById('photoInputCamera').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span>拍照</span>
+          </button>
+          <button type="button" class="photo-source-btn" onclick="document.getElementById('photoInputGallery').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            <span>从相册选择</span>
+          </button>
         </div>
+        <div class="photo-preview" id="photoPreview" onclick="document.getElementById('photoInputGallery').click()" style="display:none">
+          <img id="photoPreviewImg" alt="预览" />
+          <span class="photo-preview-hint">点此重新选择</span>
+        </div>
+        <input type="file" id="photoInputCamera" accept="image/*" capture="environment" style="display:none">
+        <input type="file" id="photoInputGallery" accept="image/*" style="display:none">
       </div>
       <div class="form-group">
         <label class="form-label">衣服名称</label>
@@ -1189,9 +1197,8 @@ function openAddModal() {
   // 重置表单
   document.getElementById("itemName").value = "";
   document.getElementById("itemCategory").value = "tops";
-  document.getElementById("photoUploadText").textContent = "点击拍照或从相册选择";
-  var preview = document.querySelector("#photoUpload img.preview");
-  if (preview) preview.remove();
+  var previewBox = document.getElementById("photoPreview");
+  if (previewBox) previewBox.style.display = "none";
   pendingPhotoBlob = null;
   // 重置颜色
   document.querySelectorAll("#colorPicker .color-option").forEach(function(o, i) {
@@ -1212,11 +1219,10 @@ document.getElementById("addModal").addEventListener("click", function(e) {
   if (e.target === this) closeAddModal();
 });
 
-// ===== 拍照添加 =====
+// ===== 拍照 / 相册选择 =====
 var pendingPhotoBlob = null;
 
-document.getElementById("photoInput").addEventListener("change", function(e) {
-  var file = e.target.files[0];
+function handlePhotoSelected(file) {
   if (!file) return;
   // 用 Canvas 压缩
   var reader = new FileReader();
@@ -1232,29 +1238,23 @@ document.getElementById("photoInput").addEventListener("change", function(e) {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       canvas.toBlob(function(blob) {
         pendingPhotoBlob = blob;
-        // 预览
-        var upload = document.getElementById("photoUpload");
-        var old = upload.querySelector("img.preview");
-        if (old) old.remove();
-        var preview = document.createElement("img");
-        preview.className = "preview";
-        preview.src = URL.createObjectURL(blob);
-        upload.appendChild(preview);
-        var hint = upload.querySelector(".change-hint");
-        if (!hint) {
-          hint = document.createElement("div");
-          hint.className = "change-hint";
-          hint.textContent = "点击重新选择";
-          upload.appendChild(hint);
-        }
-        document.getElementById("photoUploadText").style.display = "none";
+        var previewBox = document.getElementById("photoPreview");
+        var previewImg = document.getElementById("photoPreviewImg");
+        previewImg.src = URL.createObjectURL(blob);
+        previewBox.style.display = "block";
       }, "image/jpeg", 0.85);
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
-  // 清空 input 以便重复选择同一文件
-  e.target.value = "";
+}
+
+["photoInputCamera", "photoInputGallery"].forEach(function(id) {
+  document.getElementById(id).addEventListener("change", function(e) {
+    var file = e.target.files[0];
+    if (file) handlePhotoSelected(file);
+    e.target.value = "";
+  });
 });
 
 var CAT_META = {
