@@ -535,6 +535,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
           <div class="tag-option" data-cat="shoes" data-name="鞋履">鞋履</div>
           <div class="tag-option" data-cat="acc" data-name="配饰">配饰</div>
         </div>
+        <div class="detect-hint" id="catDetectHint">
+          <span id="catDetectText">AI正在识别类别...</span>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">主色</label>
@@ -1434,6 +1437,8 @@ function openAddModal() {
   pendingPhotoBlob = null;
   // 隐藏识别提示
   document.getElementById("detectHint").classList.remove("show");
+  var catHint = document.getElementById("catDetectHint");
+  if (catHint) catHint.classList.remove("show");
   // 重置类别 chips
   document.querySelectorAll("#catPicker .tag-option").forEach(function(c) {
     c.classList.toggle("selected", c.dataset.cat === "tops");
@@ -1450,6 +1455,10 @@ function openAddModal() {
     t.classList.toggle("selected", t.dataset.val === "休闲");
   });
   document.getElementById("addModal").classList.add("active");
+  // 预加载AI模型（后台静默加载，不阻塞UI）
+  if (!_mobilenetModel && !_aiModelLoading) {
+    ensureAIModel().catch(function(){ /* 静默失败，选照片时再提示 */ });
+  }
 }
 
 function closeAddModal() { document.getElementById("addModal").classList.remove("active"); }
@@ -1524,23 +1533,112 @@ function autoSuggestName() {
   document.getElementById("itemName").value = colorName + catName;
 }
 
+// ===== AI 图片分类（TensorFlow.js + MobileNet，懒加载）=====
+var _mobilenetModel = null;
+var _aiModelLoading = null;
+
+function loadScript(src) {
+  return new Promise(function(resolve, reject) {
+    var s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = function() { reject(new Error("Failed: " + src)); };
+    document.head.appendChild(s);
+  });
+}
+
+function ensureAIModel() {
+  if (_mobilenetModel) return Promise.resolve(_mobilenetModel);
+  if (_aiModelLoading) return _aiModelLoading;
+  _aiModelLoading = loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js")
+    .then(function() { return loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"); })
+    .then(function() { return window.mobilenet.load({ version: 2, alpha: 1.0 }); })
+    .then(function(model) {
+      _mobilenetModel = model;
+      _aiModelLoading = null;
+      return model;
+    })
+    .catch(function(err) {
+      _aiModelLoading = null;
+      throw err;
+    });
+  return _aiModelLoading;
+}
+
+// ImageNet类别 → 服装类别映射
+var IMAGENET_TO_CAT = {
+  "running shoe": "shoes", "sneaker": "shoes", "loafer": "shoes",
+  "sandal": "shoes", "cowboy boot": "shoes", "boot": "shoes", "clog": "shoes",
+  "t-shirt": "tops", "shirt": "tops", "jersey": "tops", "sweater": "tops",
+  "cardigan": "tops", "tank suit": "tops", "bow tie": "tops",
+  "jean": "pants", "blue jean": "pants", "denim": "pants",
+  "trouser": "pants", "pajama": "pants", "overall": "pants",
+  "gown": "dress", "dress": "dress", "maillot": "dress",
+  "bikini": "dress", "brassiere": "dress",
+  "coat": "outerwear", "jacket": "outerwear", "cloak": "outerwear",
+  "poncho": "outerwear", "fur coat": "outerwear", "suit": "outerwear",
+  "miniskirt": "dress", "sarong": "dress",
+};
+
+function classifyImageCategory(imgEl) {
+  return ensureAIModel()
+    .then(function(model) { return model.classify(imgEl, 5); })
+    .then(function(preds) {
+      for (var i = 0; i < preds.length; i++) {
+        var name = preds[i].className.toLowerCase();
+        var prob = preds[i].probability;
+        for (var key in IMAGENET_TO_CAT) {
+          if (name.indexOf(key) >= 0) {
+            return { cat: IMAGENET_TO_CAT[key], confidence: prob, label: preds[i].className };
+          }
+        }
+      }
+      return null;
+    });
+}
+
 // 照片选好后自动识别主色
 function autoDetectFromImage(imgEl) {
+  // 1. 颜色识别（同步，快）
   var rgb = extractDominantColor(imgEl);
   var match = nearestColorName(rgb);
-  // 选中对应颜色
   document.querySelectorAll("#colorPicker .color-option").forEach(function(o) {
     o.classList.toggle("selected", o.dataset.color === match.hex);
   });
-  // 显示识别提示
   var hint = document.getElementById("detectHint");
   var swatch = document.getElementById("detectSwatch");
   var text = document.getElementById("detectText");
   swatch.style.background = match.hex;
   text.textContent = "已识别主色：" + match.name + "（可手动调整）";
   hint.classList.add("show");
-  // 自动建议名称
   autoSuggestName();
+
+  // 2. AI类别识别（异步）
+  var catHint = document.getElementById("catDetectHint");
+  var catText = document.getElementById("catDetectText");
+  if (catHint) {
+    catText.textContent = "🤖 AI 正在识别类别...";
+    catHint.classList.add("show");
+  }
+  classifyImageCategory(imgEl)
+    .then(function(result) {
+      if (result && result.confidence > 0.15) {
+        document.querySelectorAll("#catPicker .tag-option").forEach(function(c) {
+          c.classList.toggle("selected", c.dataset.cat === result.cat);
+        });
+        if (catHint) {
+          catText.textContent = "🤖 已识别：" + result.label + "（" + Math.round(result.confidence * 100) + "%）可手动调整";
+        }
+        autoSuggestName();
+      } else if (catHint) {
+        catText.textContent = "未能确定服装类别，请手动选择";
+      }
+    })
+    .catch(function(err) {
+      if (catHint) catText.textContent = "AI识别暂不可用，请手动选择类别";
+      console.warn("AI classify error:", err);
+    });
 }
 
 function handlePhotoSelected(file) {
