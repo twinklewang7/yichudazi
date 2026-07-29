@@ -1,5 +1,5 @@
 // Service Worker - 衣橱搭子
-var CACHE_NAME = "wardrobe-v6";
+var CACHE_NAME = "wardrobe-v7";
 
 // 静态资源缓存：兜底列表（安装时不强求全部成功）
 var CORE_ASSETS = [
