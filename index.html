@@ -207,6 +207,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .history-stat .hs-label{font-size:10px;color:var(--text-2);margin-top:2px}
 
 .timeline{padding:0 16px 100px}
+#screen-outfit{padding-bottom:90px}
 .timeline-item{display:flex;gap:12px;margin-bottom:2px}
 .timeline-date{width:60px;flex-shrink:0;text-align:right;padding-top:12px}
 .timeline-date .td-day{font-size:14px;font-weight:600}
@@ -809,9 +810,103 @@ function isOutfitConflict(items, recentIds) {
   return items.some(function(id) { return recentIds[id]; });
 }
 
+// ===== 动态搭配生成器（纳入全部衣橱：种子 + 用户上传） =====
+var COLOR_GROUP = {
+  "白色":"neutral","米白":"neutral","黑色":"neutral","灰色":"neutral","米色":"neutral","卡其":"neutral","棕色":"neutral","银色":"neutral",
+  "浅蓝":"blue","深蓝":"blue",
+  "姜黄":"warm","珊瑚橙":"warm","红色":"warm","粉色":"warm",
+  "绿色":"green","紫色":"purple"
+};
+
+var OCCASION_STYLE = {commute:"休闲", date:"正式", casual:"休闲", formal:"正式", sport:"运动"};
+var OCCASION_DESC = {
+  commute:"适合通勤，舒服又得体", date:"约会精致度满分",
+  casual:"周末闲逛最舒服", formal:"正式场合也 hold 得住", sport:"活动自如不束缚"
+};
+var OCCASION_LABELS = {
+  commute:["活力通勤","简约通勤","温柔通勤"],
+  date:["精致甜酷","文艺浪漫","温柔知性"],
+  casual:["随性街头","户外轻松","温柔休闲"],
+  formal:["文艺气质","高级正式","知性气质"],
+  sport:["运动休闲","活力运动","轻松运动"]
+};
+
+function colorPairScore(a, b) {
+  var ga = COLOR_GROUP[a] || "neutral";
+  var gb = COLOR_GROUP[b] || "neutral";
+  if (ga === "neutral" || gb === "neutral") return 3;
+  if (ga === gb) return 2;
+  if ((ga === "blue" && gb === "warm") || (ga === "warm" && gb === "blue")) return 4;
+  if ((ga === "green" && gb === "blue") || (ga === "blue" && gb === "green")) return 3;
+  if ((ga === "purple" && gb === "blue") || (ga === "blue" && gb === "purple")) return 3;
+  return 1;
+}
+
+function colorDescText(a, b, c) {
+  var ga = COLOR_GROUP[a] || "neutral";
+  var gb = COLOR_GROUP[b] || "neutral";
+  var gc = COLOR_GROUP[c] || "neutral";
+  var groups = [ga, gb, gc];
+  var hasWarm = groups.indexOf("warm") >= 0;
+  var hasBlue = groups.indexOf("blue") >= 0;
+  var neutralCount = groups.filter(function(g){ return g === "neutral"; }).length;
+  if (neutralCount >= 2) return "色调干净利落，百搭不出错";
+  if (hasWarm && hasBlue) return "冷暖撞色有层次感";
+  if (hasWarm && neutralCount >= 1) return "亮色点睛，整体不无聊";
+  if (hasBlue && neutralCount >= 1) return "清爽蓝调，干净利落";
+  return "色彩协调，整体和谐";
+}
+
+var _candCache = {};
+function invalidateCandCache() { _candCache = {}; }
+
+function buildOutfitCandidates(occasion) {
+  if (_candCache[occasion]) return _candCache[occasion];
+  var tops = wardrobe.filter(function(i){ return i.cat === "tops"; });
+  var pants = wardrobe.filter(function(i){ return i.cat === "pants"; });
+  var shoes = wardrobe.filter(function(i){ return i.cat === "shoes"; });
+  // 衣橱不够全时，回退到静态候选表
+  if (!tops.length || !pants.length || !shoes.length) {
+    _candCache[occasion] = outfitCandidates[occasion] || [];
+    return _candCache[occasion];
+  }
+  var occStyle = OCCASION_STYLE[occasion] || "休闲";
+  var combos = [];
+  for (var t = 0; t < tops.length; t++) {
+    for (var p = 0; p < pants.length; p++) {
+      for (var s = 0; s < shoes.length; s++) {
+        var top = tops[t], bt = pants[p], sh = shoes[s];
+        var cs = colorPairScore(top.colorName, bt.colorName) + colorPairScore(bt.colorName, sh.colorName);
+        var sm = (top.style === occStyle ? 2:0) + (bt.style === occStyle ? 1:0) + (sh.style === occStyle ? 1:0);
+        var ub = (top.id.charAt(0)==="u"?8:0) + (bt.id.charAt(0)==="u"?8:0) + (sh.id.charAt(0)==="u"?8:0);
+        combos.push({ top:top, bt:bt, sh:sh, score: cs*5 + sm*4 + ub });
+      }
+    }
+  }
+  combos.sort(function(a, b){ return b.score - a.score; });
+  var top15 = combos.slice(0, 15);
+  var labels = OCCASION_LABELS[occasion] || ["百搭"];
+  var result = top15.map(function(c, i) {
+    var styleCount = [c.top.style, c.bt.style, c.sh.style].filter(function(s){ return s === occStyle; }).length;
+    var labelIdx = styleCount >= 2 ? 0 : (styleCount >= 1 ? 1 : 2);
+    return {
+      items: [c.top.id, c.bt.id, c.sh.id],
+      style: c.top.style,
+      styleLabel: labels[labelIdx] || labels[0],
+      reason: c.top.name + " + " + c.bt.name + " + " + c.sh.name + "，" +
+              colorDescText(c.top.colorName, c.bt.colorName, c.sh.colorName) + "，" +
+              (OCCASION_DESC[occasion] || "百搭不出错") + "。"
+    };
+  });
+  // 静态候选表作为兜底追加（保证搭配丰富度）
+  var staticCands = outfitCandidates[occasion] || [];
+  _candCache[occasion] = result.concat(staticCands);
+  return _candCache[occasion];
+}
+
 function pickOutfit(occasion, startIdx) {
   startIdx = startIdx || 0;
-  var cands = outfitCandidates[occasion];
+  var cands = buildOutfitCandidates(occasion);
   if (!cands || !cands.length) return { data: null, idx: 0, allConflict: true };
   var recent = getRecentItemIds(3);
   for (var i = 0; i < cands.length; i++) {
@@ -1421,6 +1516,7 @@ function submitAddItem() {
     wardrobe.push(item);
     imageUrlCache[id] = URL.createObjectURL(pendingPhotoBlob);
     persistWardrobe();
+    invalidateCandCache();  // 新衣服加入后刷新搭配候选池
     renderWardrobe();
     updateStats();
     updateCatTabs();
@@ -1436,7 +1532,7 @@ function submitAddItem() {
 function regenerateOutfit() {
   var isHome = document.getElementById("screen-home").classList.contains("active");
   var occ = isHome ? "commute" : currentOccasion;
-  var cands = outfitCandidates[occ];
+  var cands = buildOutfitCandidates(occ);
   if (!cands || cands.length <= 1) {
     var p = pickOutfit(occ, 0);
     if (isHome) renderHomeOutfitData(p.data, p.allConflict);
