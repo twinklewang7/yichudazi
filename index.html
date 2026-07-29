@@ -77,6 +77,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .today-reason{padding:0 16px 12px;font-size:12px;color:var(--text-2);line-height:1.6}
 .today-reason strong{color:var(--primary);font-weight:500}
 .no-repeat-tag{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:10px;font-size:11px;background:var(--accent-light);color:var(--accent)}
+.anomaly-tip{margin-top:6px;padding:6px 10px;border-radius:8px;font-size:12px;background:#FFF3F0;color:#C25B3F;border-left:3px solid #E07856}
 
 .today-actions{display:flex;gap:8px;padding:0 16px 14px}
 .btn{flex:1;padding:10px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;border:none;cursor:pointer;transition:opacity 0.15s}
@@ -325,6 +326,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
       <div class="today-reason">
         <strong>搭配理由：</strong><span id="homeOutfitReason"></span>
         <div class="no-repeat-tag" id="homeOutfitConflictTip" style="display:none">最近 3 天没有不重复的衣服了，全衣橱轮一遍</div>
+        <div class="anomaly-tip" id="homeOutfitAnomalyTip" style="display:none"></div>
       </div>
       <div class="today-actions">
         <button class="btn btn-secondary" onclick="regenerateOutfit()">换一套</button>
@@ -418,6 +420,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
           <div class="ai-tag">AI 搭配分析 · 3天不重复</div>
           <div id="outfitReasonText"></div>
           <div class="no-repeat-tag" id="outfitConflictTip" style="display:none">最近 3 天没有不重复的衣服了</div>
+          <div class="anomaly-tip" id="outfitAnomalyTip" style="display:none"></div>
         </div>
         <div class="outfit-actions">
           <button class="btn btn-secondary" onclick="regenerateOutfit()">换一套</button>
@@ -526,6 +529,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
         <label class="form-label">类别</label>
         <div class="tag-picker" id="catPicker">
           <div class="tag-option selected" data-cat="tops" data-name="上衣">上衣</div>
+          <div class="tag-option" data-cat="dress" data-name="连衣裙">连衣裙</div>
           <div class="tag-option" data-cat="pants" data-name="裤装">裤装</div>
           <div class="tag-option" data-cat="outerwear" data-name="外套">外套</div>
           <div class="tag-option" data-cat="shoes" data-name="鞋履">鞋履</div>
@@ -585,6 +589,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
     <div class="picker-sheet">
       <h3 id="pickerTitle">选择上衣</h3>
       <div class="picker-grid" id="pickerGrid"></div>
+    </div>
+  </div>
+
+  <!-- 编辑衣服弹层（长按衣橱里的衣服触发） -->
+  <div class="modal-overlay" id="editItemModal">
+    <div class="modal-card">
+      <div class="modal-title">编辑衣服</div>
+      <div class="form-group">
+        <label class="form-label">名称</label>
+        <input class="form-input" id="editItemName" placeholder="例如：白色圆领T恤" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">类别</label>
+        <div class="tag-picker" id="editCatPicker">
+          <div class="tag-option" data-cat="tops" data-name="上衣">上衣</div>
+          <div class="tag-option" data-cat="dress" data-name="连衣裙">连衣裙</div>
+          <div class="tag-option" data-cat="pants" data-name="裤装">裤装</div>
+          <div class="tag-option" data-cat="outerwear" data-name="外套">外套</div>
+          <div class="tag-option" data-cat="shoes" data-name="鞋履">鞋履</div>
+          <div class="tag-option" data-cat="acc" data-name="配饰">配饰</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('editItemModal').classList.remove('active')">取消</button>
+        <button class="btn btn-primary" onclick="saveEditItem()">保存</button>
+      </div>
     </div>
   </div>
 
@@ -863,23 +893,39 @@ function invalidateCandCache() { _candCache = {}; }
 function buildOutfitCandidates(occasion) {
   if (_candCache[occasion]) return _candCache[occasion];
   var tops = wardrobe.filter(function(i){ return i.cat === "tops"; });
+  var dresses = wardrobe.filter(function(i){ return i.cat === "dress"; });
   var pants = wardrobe.filter(function(i){ return i.cat === "pants"; });
   var shoes = wardrobe.filter(function(i){ return i.cat === "shoes"; });
   // 衣橱不够全时，回退到静态候选表
-  if (!tops.length || !pants.length || !shoes.length) {
+  if ((!tops.length && !dresses.length) || (!pants.length && !dresses.length) || !shoes.length) {
     _candCache[occasion] = outfitCandidates[occasion] || [];
     return _candCache[occasion];
   }
   var occStyle = OCCASION_STYLE[occasion] || "休闲";
   var combos = [];
-  for (var t = 0; t < tops.length; t++) {
-    for (var p = 0; p < pants.length; p++) {
-      for (var s = 0; s < shoes.length; s++) {
-        var top = tops[t], bt = pants[p], sh = shoes[s];
-        var cs = colorPairScore(top.colorName, bt.colorName) + colorPairScore(bt.colorName, sh.colorName);
-        var sm = (top.style === occStyle ? 2:0) + (bt.style === occStyle ? 1:0) + (sh.style === occStyle ? 1:0);
-        var ub = (top.id.charAt(0)==="u"?8:0) + (bt.id.charAt(0)==="u"?8:0) + (sh.id.charAt(0)==="u"?8:0);
-        combos.push({ top:top, bt:bt, sh:sh, score: cs*5 + sm*4 + ub });
+  // 1) 上衣 + 裤/裙 + 鞋 (三件)
+  if (tops.length && pants.length) {
+    for (var t = 0; t < tops.length; t++) {
+      for (var p = 0; p < pants.length; p++) {
+        for (var s = 0; s < shoes.length; s++) {
+          var top = tops[t], bt = pants[p], sh = shoes[s];
+          var cs = colorPairScore(top.colorName, bt.colorName) + colorPairScore(bt.colorName, sh.colorName);
+          var sm = (top.style === occStyle ? 2:0) + (bt.style === occStyle ? 1:0) + (sh.style === occStyle ? 1:0);
+          var ub = (top.id.charAt(0)==="u"?8:0) + (bt.id.charAt(0)==="u"?8:0) + (sh.id.charAt(0)==="u"?8:0);
+          combos.push({ parts:[top, bt, sh], score: cs*5 + sm*4 + ub });
+        }
+      }
+    }
+  }
+  // 2) 连衣裙 + 鞋 (两件)
+  if (dresses.length) {
+    for (var d = 0; d < dresses.length; d++) {
+      for (var s2 = 0; s2 < shoes.length; s2++) {
+        var dr = dresses[d], sh2 = shoes[s2];
+        var cs2 = colorPairScore(dr.colorName, sh2.colorName);
+        var sm2 = (dr.style === occStyle ? 2:0) + (sh2.style === occStyle ? 1:0);
+        var ub2 = (dr.id.charAt(0)==="u"?8:0) + (sh2.id.charAt(0)==="u"?8:0);
+        combos.push({ parts:[dr, sh2], score: cs2*5 + sm2*4 + ub2 + 2 });
       }
     }
   }
@@ -887,15 +933,18 @@ function buildOutfitCandidates(occasion) {
   var top15 = combos.slice(0, 15);
   var labels = OCCASION_LABELS[occasion] || ["百搭"];
   var result = top15.map(function(c, i) {
-    var styleCount = [c.top.style, c.bt.style, c.sh.style].filter(function(s){ return s === occStyle; }).length;
+    var styleCount = c.parts.filter(function(p){ return p.style === occStyle; }).length;
     var labelIdx = styleCount >= 2 ? 0 : (styleCount >= 1 ? 1 : 2);
+    var names = c.parts.map(function(p){ return p.name; });
+    var colors = c.parts.map(function(p){ return p.colorName; });
+    var reason = names.join(" + ") + "，" +
+                 (c.parts.length === 2 ? colorDescText(colors[0], colors[1], "中性") : colorDescText(colors[0], colors[1], colors[2])) + "，" +
+                 (OCCASION_DESC[occasion] || "百搭不出错") + "。";
     return {
-      items: [c.top.id, c.bt.id, c.sh.id],
-      style: c.top.style,
+      items: c.parts.map(function(p){ return p.id; }),
+      style: c.parts[0].style,
       styleLabel: labels[labelIdx] || labels[0],
-      reason: c.top.name + " + " + c.bt.name + " + " + c.sh.name + "，" +
-              colorDescText(c.top.colorName, c.bt.colorName, c.sh.colorName) + "，" +
-              (OCCASION_DESC[occasion] || "百搭不出错") + "。"
+      reason: reason
     };
   });
   // 静态候选表作为兜底追加（保证搭配丰富度）
@@ -1099,7 +1148,7 @@ function renderWardrobe(cat) {
     return;
   }
   var html = items.map(function(item) {
-    return '<div class="clothes-card">' +
+    return '<div class="clothes-card" oncontextmenu="event.preventDefault();event.stopPropagation();openEditItemModal(\'' + item.id + '\')" ontouchstart="window._longPressTimer=setTimeout(function(){openEditItemModal(\'' + item.id + '\')},600);" ontouchend="clearTimeout(window._longPressTimer);" ontouchmove="clearTimeout(window._longPressTimer);">' +
       '<div class="clothes-card-img">' + itemImgHtml(item) +
         '<button class="clothes-card-delete" onclick="event.stopPropagation();deleteItem(\'' + item.id + '\')">&times;</button>' +
       '</div>' +
@@ -1113,6 +1162,39 @@ function renderWardrobe(cat) {
     '</div>';
   }).join("");
   document.getElementById("wardrobeGrid").innerHTML = html;
+}
+
+var _editItemId = null;
+function openEditItemModal(id) {
+  var item = getItemById(id);
+  if (!item) return;
+  _editItemId = id;
+  document.getElementById("editItemName").value = item.name;
+  document.querySelectorAll("#editCatPicker .tag-option").forEach(function(c) {
+    c.classList.toggle("selected", c.dataset.cat === item.cat);
+  });
+  document.getElementById("editItemModal").classList.add("active");
+}
+
+function saveEditItem() {
+  if (!_editItemId) return;
+  var item = getItemById(_editItemId);
+  if (!item) { _editItemId = null; return; }
+  var newName = document.getElementById("editItemName").value.trim() || item.name;
+  var catOpt = document.querySelector("#editCatPicker .tag-option.selected");
+  var newCat = catOpt ? catOpt.dataset.cat : item.cat;
+  var meta = CAT_META[newCat] || CAT_META.tops;
+  item.name = newName;
+  item.cat = newCat;
+  item.catName = meta.catName;
+  item.shape = meta.shape;
+  persistWardrobe();
+  invalidateCandCache();
+  renderWardrobe();
+  updateStats();
+  document.getElementById("editItemModal").classList.remove("active");
+  _editItemId = null;
+  showToast("已更新");
 }
 
 function deleteItem(id) {
@@ -1152,6 +1234,25 @@ function renderOutfitData(data, allConflict) {
   document.getElementById("itemCount").textContent = items.length + "件";
   var tip = document.getElementById("outfitConflictTip");
   if (tip) tip.style.display = allConflict ? "block" : "none";
+  showCategoryAnomalyIfNeeded("outfitAnomalyTip", items);
+}
+
+function showCategoryAnomalyIfNeeded(tipId, items) {
+  var tip = document.getElementById(tipId);
+  if (!tip) return;
+  var counts = {};
+  items.forEach(function(it) { counts[it.cat] = (counts[it.cat] || 0) + 1; });
+  var dup = Object.keys(counts).filter(function(k) { return counts[k] >= 2; });
+  if (dup.length === 0) {
+    tip.style.display = "none";
+    return;
+  }
+  var dupNames = dup.map(function(k) {
+    var labelMap = { tops:"上衣", dress:"连衣裙", pants:"裤装", outerwear:"外套", shoes:"鞋子", acc:"配饰" };
+    return labelMap[k] || k;
+  }).join("、");
+  tip.textContent = "⚠️ 这套搭配里有" + dupNames + "（可能分类错了），去衣橱页长按可改分类～";
+  tip.style.display = "block";
 }
 
 // ===== 渲染：历史时间线 =====
@@ -1298,6 +1399,14 @@ document.querySelectorAll("#catPicker .tag-option").forEach(function(chip) {
     document.querySelectorAll("#catPicker .tag-option").forEach(function(c) { c.classList.remove("selected"); });
     this.classList.add("selected");
     autoSuggestName();
+  });
+});
+
+// 编辑弹层里的类别选择
+document.querySelectorAll("#editCatPicker .tag-option").forEach(function(chip) {
+  chip.addEventListener("click", function() {
+    document.querySelectorAll("#editCatPicker .tag-option").forEach(function(c) { c.classList.remove("selected"); });
+    this.classList.add("selected");
   });
 });
 
@@ -1473,6 +1582,7 @@ function handlePhotoSelected(file) {
 
 var CAT_META = {
   tops:    { catName: "上衣",  shape: "top" },
+  dress:   { catName: "连衣裙", shape: "dress" },
   pants:   { catName: "裤装",  shape: "pants" },
   outerwear:{ catName: "外套",  shape: "outerwear" },
   shoes:   { catName: "鞋履",  shape: "shoes" },
@@ -1560,6 +1670,7 @@ function renderHomeOutfitData(data, allConflict) {
   document.getElementById("homeOutfitReason").textContent = data.reason;
   var tip = document.getElementById("homeOutfitConflictTip");
   if (tip) tip.style.display = allConflict ? "block" : "none";
+  showCategoryAnomalyIfNeeded("homeOutfitAnomalyTip", items);
 }
 
 function occasionLabel(occ) {
