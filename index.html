@@ -131,8 +131,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .clothes-card-meta{display:flex;gap:4px;align-items:center}
 .color-dot{width:10px;height:10px;border-radius:50%;border:0.5px solid var(--border-strong);flex-shrink:0}
 .clothes-card-cat{font-size:10px;color:var(--text-3)}
-.clothes-card-delete{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.4);color:#fff;border:none;font-size:14px;display:none;align-items:center;justify-content:center;cursor:pointer;line-height:1}
-.clothes-card:hover .clothes-card-delete{display:flex}
+.clothes-card-edit,.clothes-card-delete{position:absolute;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.45);color:#fff;border:none;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;z-index:2}
+.clothes-card-edit{top:6px;left:6px}
+.clothes-card-delete{top:6px;right:6px;font-size:15px}
 
 .add-fab{position:fixed;bottom:80px;left:50%;transform:translateX(130px);width:52px;height:52px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:24px;cursor:pointer;box-shadow:0 4px 12px rgba(107,91,149,0.3);z-index:50;transition:transform 0.1s}
 .add-fab:active{transform:translateX(130px) scale(0.9)}
@@ -614,6 +615,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
           <div class="tag-option" data-cat="acc" data-name="配饰">配饰</div>
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">主色</label>
+        <div class="color-picker" id="editColorPicker">
+          <div class="color-option" style="background:#FFFFFF" data-color="#FFFFFF" data-name="白色"></div>
+          <div class="color-option" style="background:#1A1A18" data-color="#1A1A18" data-name="黑色"></div>
+          <div class="color-option" style="background:#9C9A92" data-color="#9C9A92" data-name="灰色"></div>
+          <div class="color-option" style="background:#A8B8C5" data-color="#A8B8C5" data-name="浅蓝"></div>
+          <div class="color-option" style="background:#2C4A7C" data-color="#2C4A7C" data-name="深蓝"></div>
+          <div class="color-option" style="background:#D4C5A9" data-color="#D4C5A9" data-name="米色"></div>
+          <div class="color-option" style="background:#B8956A" data-color="#B8956A" data-name="卡其"></div>
+          <div class="color-option" style="background:#8B5A3C" data-color="#8B5A3C" data-name="棕色"></div>
+          <div class="color-option" style="background:#C9A23D" data-color="#C9A23D" data-name="姜黄"></div>
+          <div class="color-option" style="background:#E07856" data-color="#E07856" data-name="珊瑚橙"></div>
+          <div class="color-option" style="background:#C0392B" data-color="#C0392B" data-name="红色"></div>
+          <div class="color-option" style="background:#E8B4B8" data-color="#E8B4B8" data-name="粉色"></div>
+          <div class="color-option" style="background:#5A8A5A" data-color="#5A8A5A" data-name="绿色"></div>
+          <div class="color-option" style="background:#6B5B95" data-color="#6B5B95" data-name="紫色"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">适合季节</label>
+        <div class="tag-picker" id="editSeasonPicker">
+          <div class="tag-option" data-val="春">春</div>
+          <div class="tag-option" data-val="夏">夏</div>
+          <div class="tag-option" data-val="秋">秋</div>
+          <div class="tag-option" data-val="冬">冬</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">风格标签</label>
+        <div class="tag-picker" id="editStylePicker">
+          <div class="tag-option" data-val="休闲">休闲</div>
+          <div class="tag-option" data-val="商务">商务</div>
+          <div class="tag-option" data-val="运动">运动</div>
+          <div class="tag-option" data-val="正式">正式</div>
+        </div>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="document.getElementById('editItemModal').classList.remove('active')">取消</button>
         <button class="btn btn-primary" onclick="saveEditItem()">保存</button>
@@ -928,7 +966,7 @@ function buildOutfitCandidates(occasion) {
         var cs2 = colorPairScore(dr.colorName, sh2.colorName);
         var sm2 = (dr.style === occStyle ? 2:0) + (sh2.style === occStyle ? 1:0);
         var ub2 = (dr.id.charAt(0)==="u"?8:0) + (sh2.id.charAt(0)==="u"?8:0);
-        combos.push({ parts:[dr, sh2], score: cs2*5 + sm2*4 + ub2 + 2 });
+        combos.push({ parts:[dr, sh2], score: cs2*5 + sm2*4 + ub2 + 40 });
       }
     }
   }
@@ -1153,6 +1191,7 @@ function renderWardrobe(cat) {
   var html = items.map(function(item) {
     return '<div class="clothes-card" oncontextmenu="event.preventDefault();event.stopPropagation();openEditItemModal(\'' + item.id + '\')" ontouchstart="window._longPressTimer=setTimeout(function(){openEditItemModal(\'' + item.id + '\')},600);" ontouchend="clearTimeout(window._longPressTimer);" ontouchmove="clearTimeout(window._longPressTimer);">' +
       '<div class="clothes-card-img">' + itemImgHtml(item) +
+        '<button class="clothes-card-edit" onclick="event.stopPropagation();openEditItemModal(\'' + item.id + '\')">✎</button>' +
         '<button class="clothes-card-delete" onclick="event.stopPropagation();deleteItem(\'' + item.id + '\')">&times;</button>' +
       '</div>' +
       '<div class="clothes-card-info">' +
@@ -1173,8 +1212,22 @@ function openEditItemModal(id) {
   if (!item) return;
   _editItemId = id;
   document.getElementById("editItemName").value = item.name;
+  // 类别
   document.querySelectorAll("#editCatPicker .tag-option").forEach(function(c) {
     c.classList.toggle("selected", c.dataset.cat === item.cat);
+  });
+  // 颜色
+  document.querySelectorAll("#editColorPicker .color-option").forEach(function(o) {
+    o.classList.toggle("selected", o.dataset.color === item.color);
+  });
+  // 季节
+  var seasons = item.seasons || [];
+  document.querySelectorAll("#editSeasonPicker .tag-option").forEach(function(t) {
+    t.classList.toggle("selected", seasons.indexOf(t.dataset.val) >= 0);
+  });
+  // 风格
+  document.querySelectorAll("#editStylePicker .tag-option").forEach(function(t) {
+    t.classList.toggle("selected", t.dataset.val === item.style);
   });
   document.getElementById("editItemModal").classList.add("active");
 }
@@ -1187,10 +1240,20 @@ function saveEditItem() {
   var catOpt = document.querySelector("#editCatPicker .tag-option.selected");
   var newCat = catOpt ? catOpt.dataset.cat : item.cat;
   var meta = CAT_META[newCat] || CAT_META.tops;
+  var colorOpt = document.querySelector("#editColorPicker .color-option.selected");
+  var newColor = colorOpt ? colorOpt.dataset.color : item.color;
+  var newColorName = colorOpt ? colorOpt.dataset.name : item.colorName;
+  var newSeasons = Array.prototype.slice.call(document.querySelectorAll("#editSeasonPicker .tag-option.selected")).map(function(t) { return t.dataset.val; });
+  var styleOpts = document.querySelectorAll("#editStylePicker .tag-option.selected");
+  var newStyle = styleOpts.length ? styleOpts[0].dataset.val : item.style;
   item.name = newName;
   item.cat = newCat;
   item.catName = meta.catName;
   item.shape = meta.shape;
+  item.color = newColor;
+  item.colorName = newColorName;
+  item.style = newStyle;
+  if (newSeasons.length) item.seasons = newSeasons;
   persistWardrobe();
   invalidateCandCache();
   renderWardrobe();
@@ -1409,6 +1472,27 @@ document.querySelectorAll("#catPicker .tag-option").forEach(function(chip) {
 document.querySelectorAll("#editCatPicker .tag-option").forEach(function(chip) {
   chip.addEventListener("click", function() {
     document.querySelectorAll("#editCatPicker .tag-option").forEach(function(c) { c.classList.remove("selected"); });
+    this.classList.add("selected");
+  });
+});
+
+// 编辑弹层里的颜色选择（单选）
+document.querySelectorAll("#editColorPicker .color-option").forEach(function(opt) {
+  opt.addEventListener("click", function() {
+    document.querySelectorAll("#editColorPicker .color-option").forEach(function(o) { o.classList.remove("selected"); });
+    this.classList.add("selected");
+  });
+});
+
+// 编辑弹层里的季节（多选）
+document.querySelectorAll("#editSeasonPicker .tag-option").forEach(function(tag) {
+  tag.addEventListener("click", function() { this.classList.toggle("selected"); });
+});
+
+// 编辑弹层里的风格（单选）
+document.querySelectorAll("#editStylePicker .tag-option").forEach(function(tag) {
+  tag.addEventListener("click", function() {
+    document.querySelectorAll("#editStylePicker .tag-option").forEach(function(t) { t.classList.remove("selected"); });
     this.classList.add("selected");
   });
 });
